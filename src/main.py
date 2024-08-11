@@ -1392,7 +1392,7 @@ def main():
 	clock = pygame.time.Clock()
 	run = True
 	while run:
-		clock.tick(60)
+		clock.tick(FPS)
 		game.get_mouse_pos()
 		for event in pygame.event.get():
 			if event.type == pygame.QUIT:
