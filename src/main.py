@@ -3,6 +3,8 @@ Interface graphique et logique pour le jeu du pendu.
 """
 
 import numpy as np
+import graphical
+import actions
 import pygame
 
 pygame.init()
@@ -79,8 +81,10 @@ class Game:
 		self.initialized = False
 		self.guess = False
 		self.make_guess = False
+		self.two_player = False
 		self.mouse_on_guess = False
 		self.mouse_on_m_guess = False
+		self.mouse_on_2_player = False
 		self.length = 5
 		self.tirets = None
 		self.mouse_on_return = False
@@ -106,9 +110,21 @@ class Game:
 		self.start_m = False
 		self.can_start_m = False
 		self.m_on_start_m = False
-		self.cells_dx = None
 		self.profil = np.zeros(5, dtype='int8')
 		self.show_no_word = False
+
+		# two human player
+		self.start_2p = False
+		self.health_p1 = 7
+		self.health_p2 = 7
+		self.vict_1 = 0
+		self.vict_2 = 0
+		self.defai_1 = 0
+		self.defai_2 = 0
+		self.turn = None
+		self.step = None
+		self.mouse_on_p1 = False
+		self.mouse_on_p2= False
 
 		# guess play part
 		self.choiced = None
@@ -146,165 +162,48 @@ class Game:
 		"""
 		self.mouse_pos = pygame.mouse.get_pos()
 
-	def draw_word(self):
-		"""
-		Fonction pour tirer aléatoirement un mot répondant aux
-		caractéristiques données par l'utilisateur.
-		"""
-		mots = np.copy(DATA['mots'])
-		tire = np.copy(DATA['rec_map'][:, 0])
-		mask = (DATA['longueur'] >= self.length_limits[0])&(
-				DATA['longueur'] <= self.length_limits[1])
-
-		mots = mots[mask]
-		tire = tire[mask]
-		if self.tirets == False:
-			mots = mots[tire == 0]
-	
-		self.choiced = mots[np.random.randint(0, len(mots))]
-
-	def is_possible_start_mg(self):
+	def is_possible_start_mg(self): # 185 -> 163
 		"""
 		Fonction pour voir si il y a au moins un mots répondant aux
 		caractéristiques données par l'utilisateur.
 		"""
-		mapp = np.copy(DATA['map'])[:, :self.length]
-		rec_mapp = np.copy(DATA['rec_map'])
-		caracteres = np.copy(DATA['caracteres'])
-		mask = DATA['longueur'] == self.length
-		mapp = mapp[mask]
-		rec_mapp = rec_mapp[mask]
-		if self.num_tirets > 0:
-			mask = rec_mapp[:, 0] == self.num_tirets
-			mapp = mapp[mask]
-			rec_mapp = rec_mapp[mask]
-			known = len(self.profil[self.profil != 0])
-			perf = mapp == self.profil
-			occur = np.sum(perf, axis=1)
-			mask = occur == known
-			mapp = mapp[mask]
-			rec_mapp = rec_mapp[mask]
+		(self.mapp, self.rec_mapp, self.can_start_m
+		 ) = actions.is_possible_start_mg(DATA, self.length, self.num_tirets,
+										  self.profil)
 
-		else:
-			mask = rec_mapp[:, 0] == 0
-			mapp = mapp[mask]
-			rec_mapp = rec_mapp[mask]
-
-		self.mapp = np.copy(mapp)
-		self.rec_mapp = np.copy(rec_mapp)
-		self.can_start_m = len(rec_mapp) > 0
-
-	def whats_best(self):
+	def whats_best(self): # 229 -> 177
 		"""
 		Fonction pour chercher le meilleur caractère à utiliser pour trouver
 		le mot choisit par l'humain. L'approche est baser sur la fréquence d'
 		apparition de chaque lettre "minimale".
 		"""
-		sub_map = np.copy(self.mapp)
-		if len(sub_map) == 0:
-			self.no_possible = True # No possible word from the data
-			self.health = 0
-			self.result_mg = 'p'
+		(self.no_possible, self.health, self.result_mg, self.one_possible,
+		 self.propose, self.possibles, self.center_propos, self.m_on_propose,
+		 self.selected) = actions.whats_best(DATA, self.mapp, self.no_possible,
+											 self.health, self.result_mg,
+											 self.one_possible, self.propose,
+											 self.choiced, self.link_dico,
+											 WIDTH, self.representation,
+											 self.center_propos, self.possibles,
+											 self.m_on_propose, self.selected)
 
-		elif len(sub_map) == 1:
-			self.one_possible = True
-			mot = np.sum(DATA['caracteres'][sub_map[0]-1].astype(object))
-			self.propose = mot
-
-		elif sub_map.shape[0] > 2:
-			m_equal = DATA['caracteres'] == np.array(list(self.choiced))[:, np.newaxis]
-			vals_in = np.argwhere(m_equal)[:, 1]+1
-			if len(vals_in) == 0:
-				# => il n'y a aucun caractère connus
-				sub_map[(sub_map >= 54)&(sub_map <= 56)] = 28
-				sub_map[sub_map == 57] = 30
-				sub_map[(sub_map >= 58)&(sub_map <= 61)] = 32
-				sub_map[(sub_map >= 62)&(sub_map <= 63)] = 36
-				sub_map[(sub_map >= 64)&(sub_map <= 65)] = 42
-				sub_map[(sub_map >= 66)&(sub_map <= 68)] = 48
-				sub_map[(sub_map < 27)&(sub_map != 1)] += 26
-				values, counts = (np.unique(sub_map, return_counts=True))
-				maxi = values[counts == np.max(counts)]
-				maxi = maxi[0]-1
-				self.propose = DATA['caracteres'][maxi]
-				self.get_linked_letters()
-
-			else:
-				sub_map = sub_map[:, self.representation == False]
-				sub_map[(sub_map >= 54)&(sub_map <= 56)] = 28
-				sub_map[sub_map == 57] = 30
-				sub_map[(sub_map >= 58)&(sub_map <= 61)] = 32
-				sub_map[(sub_map >= 62)&(sub_map <= 63)] = 36
-				sub_map[(sub_map >= 64)&(sub_map <= 65)] = 42
-				sub_map[(sub_map >= 66)&(sub_map <= 68)] = 48
-				sub_map[(sub_map < 27)&(sub_map != 1)] += 26
-				values, counts = (np.unique(sub_map, return_counts=True))
-				maxi = values[counts == np.max(counts)]
-				maxi = maxi[0]-1
-				self.propose = DATA['caracteres'][maxi]
-				self.get_linked_letters()
-
-		elif sub_map.shape[0] == 2:
-			differ = (sub_map[0] != sub_map[1])&(self.representation == False)
-			sub_map = sub_map[:, differ]
-			sub_map[(sub_map >= 54)&(sub_map <= 56)] = 28
-			sub_map[sub_map == 57] = 30
-			sub_map[(sub_map >= 58)&(sub_map <= 61)] = 32
-			sub_map[(sub_map >= 62)&(sub_map <= 63)] = 36
-			sub_map[(sub_map >= 64)&(sub_map <= 65)] = 42
-			sub_map[(sub_map >= 66)&(sub_map <= 68)] = 48
-			sub_map[(sub_map < 27)&(sub_map != 1)] += 26
-			values, counts = (np.unique(sub_map, return_counts=True))
-			maxi = values[counts == np.max(counts)]
-			maxi = maxi[0]-1
-			self.propose = DATA['caracteres'][maxi]
-			self.get_linked_letters()
-
-	def update_from_answer(self):
+	def update_from_answer(self): # 253 -> 238
 		"""
 		Fonction pour enlever les mots ne répondant pas aux caractéristiques
 		connues.
 		"""
-		sub_map = np.copy(self.mapp)
-		if self.is_letter:
-			for i in range(len(self.choiced)):
-				if self.choiced[i] != '_':
-					numb = np.where(DATA['caracteres'] == self.choiced[i])[0][0]+1
-					sub_map = sub_map[sub_map[:, i] == numb]
+		self.mapp = actions.update_from_answer(self.mapp, self.is_letter,
+											   self.choiced, self.possibles,
+											   DATA)
 
-				else:
-					for j in range(len(self.possibles)):
-						numb = np.where(DATA['caracteres'] == self.possibles[j])[0][0]+1
-						sub_map = sub_map[sub_map[:, i] != numb]
-
-		else:
-			for i in range(len(self.possibles)):
-				numb = np.where(DATA['caracteres'] == self.possibles[i])[0][0]+1
-				sub_map = sub_map[np.sum(sub_map == numb, axis=1) == 0]
-
-		self.mapp = np.copy(sub_map)
-
-	def get_linked_letters(self):
-		"""
-		Fonction pour extraire les caractères associées à la lettre "minimale"
-		choisit par la fonction 'whats_best'
-		"""
-		self.possibles = np.array(self.link_dico[self.propose])
-		num_p = len(self.possibles)
-		self.center_propos = WIDTH/2 + (np.arange(num_p)-num_p/2)*60
-		self.m_on_propose = np.zeros(num_p, dtype=bool)
-		self.selected = np.zeros(num_p, dtype=bool)
-
-	def guess_victory(self):
+	def guess_victory(self): # 260 -> 2558
 		"""
 		Fonction pour détecter si l'humain a réussis (gagné) ou non (perdu) à
 		trouver le mot choisit par l'ordinateur.
 		"""
-		if self.health <= 0:
-			self.result_g = 'p'
-		else:
-			if np.sum(self.representation) == self.length:
-				self.result_g = 'v'
+		self.result_g = actions.guess_victory(self.health,
+											  self.representation,
+											  self.length, self.result_g)
 
 	def re_init_accueil(self):
 		"""
@@ -314,8 +213,10 @@ class Game:
 		self.initialized = False
 		self.guess = False
 		self.make_guess = False
+		self.two_player = False
 		self.mouse_on_guess = False
 		self.mouse_on_m_guess = False
+		self.mouse_on_2_player = False
 		self.length = 5
 		self.tirets = None
 		self.mouse_on_return = False
@@ -340,9 +241,21 @@ class Game:
 		self.start_m = False
 		self.can_start_m = False
 		self.m_on_start_m = False
-		self.cells_dx = None
 		self.profil = np.zeros(5, dtype='int8')
 		self.show_no_word = False
+
+		# two human player
+		self.start_2p = False
+		self.health_p1 = 7
+		self.health_p2 = 7
+		self.vict_1 = 0
+		self.vict_2 = 0
+		self.defai_1 = 0
+		self.defai_2 = 0
+		self.turn = None
+		self.step = None
+		self.mouse_on_p1 = False
+		self.mouse_on_p2= False
 
 		# guess play part
 		self.choiced = None
@@ -383,8 +296,9 @@ class Game:
 		self.initialized = True
 		self.guess = True
 		self.make_guess = False
+		self.two_player = False
 		self.length = 5
-		self.length_limits = [1, 27]
+		self.length_limits = [1, 25]
 		self.tirets = None
 		self.show_must_choice_tiret = False
 		self.choiced = None
@@ -406,6 +320,7 @@ class Game:
 		self.initialized = True
 		self.guess = False
 		self.make_guess = True
+		self.two_player = False
 		self.length = 5
 		self.result_mg = None
 		self.m_on_tiret_mg = False
@@ -413,7 +328,6 @@ class Game:
 		self.start_m = False
 		self.can_start_m = False
 		self.m_on_start_m = False
-		self.cells_dx = None
 		self.tested_letters = []
 		self.representation = np.zeros(self.length, dtype=bool)
 		self.choiced = '_'*self.length
@@ -437,952 +351,380 @@ class Game:
 		self.no_possible = False
 		self.one_possible = False
 
-	def mouse_mode_on(self):
+	def re_init_2_player(self):
+		self.health = 7
+		self.initialized = True
+		self.guess = False
+		self.make_guess = False
+		self.two_player = True
+		self.length = 5
+		self.start_2p = False
+		self.turn = None
+		self.step = None
+		self.result_mg = None
+		self.clavier = np.zeros(26, dtype='int8')
+
+		self.tested_letters = []
+		self.representation = np.zeros(self.length, dtype=bool)
+		self.choiced = '_'*self.length
+		self.recenter = WIDTH/2-30*self.length/2
+		self.profil = np.zeros(5, dtype='int8')
+		self.etat = np.zeros(self.length) -1
+		self.possibles = None
+		self.selected = None
+		self.center_propos = None
+		self.is_letter = None
+
+		self.mouse_on_cr_up = False
+		self.mouse_on_mi_up = False
+		self.mouse_on_return = False
+		self.m_on_tiret_mg = False
+		self.m_on_start_m = False
+		self.mouse_on_p1 = False
+		self.mouse_on_p2 = False
+		self.m_on_propose = None
+		self.m_on_conf_mkg = False
+		self.m_on_oui_mkg = False
+		self.m_on_non_mkg = False
+
+	def mouse_mode_on(self): # 452 -> 443
 		"""
 		Fonction pour détecter si le curseur de la souris se trouve au-dessus
 		d'un des deux bouttons du choix du type de jeu.
 		"""
-		if (self.mouse_pos[0] >= 129.4)&(self.mouse_pos[1] >= 282.95)&(
-			self.mouse_pos[0] <= 669.6)&(self.mouse_pos[1] <= 317.05):
-			self.mouse_on_guess = True
-		else:
-			self.mouse_on_guess = False
+		(self.mouse_on_guess, self.mouse_on_m_guess,
+		 self.mouse_on_2_player) = actions.mouse_mode_on(self.mouse_pos)
 
-		if (self.mouse_pos[0] >= 155.8)&(self.mouse_pos[1] >= 383.5)&(
-			self.mouse_pos[0] <= 644.2)&(self.mouse_pos[1] <= 416.5):
-			self.mouse_on_m_guess = True
-		else:
-			self.mouse_on_m_guess = False
-
-	def mouse_return_on(self):
+	def mouse_return_on(self): # 467 -> 451
 		"""
 		Fonction pour détecter si le curseur de la souris se trouve au-dessus
 		de la flêche permettant de revenir au menu précédant.
 		"""
-		mouse_p_arr = np.array(self.mouse_pos)
-		vect = mouse_p_arr-HEAD
-		norm = np.sum(vect**2, 1)**0.5
-		prod = np.sum(vect[[0, 0, 1]]*vect[[1, 2, 2]], 1)
-		theta = round(np.sum(np.arccos(
-						prod/(norm[[0, 0, 1]]*norm[[1, 2, 2]]))), 6)
+		self.mouse_on_return = actions.mouse_return_on(self.mouse_pos,
+														HEAD, ARROW, PI2)
 
-		if (self.mouse_pos[0] >= ARROW[2, 0])&(
-				self.mouse_pos[1] >= ARROW[4, 1])&(
-					self.mouse_pos[0] <= ARROW[4, 0])&(
-						self.mouse_pos[1] <= ARROW[2, 1]):
-
-			self.mouse_on_return = True
-
-		elif theta == PI2:
-			self.mouse_on_return = True
-		else:
-			self.mouse_on_return = False
-
-	def mouse_on_pm_up(self):
+	def mouse_on_pm_up(self): # 494 -> 485
 		"""
 		Fonction pour détecter si le curseur de la souris se trouve au-dessus
 		des boutons servant à faire varier la valeur de la borne minimal du
 		nombre de caractères d'un mot.
 		"""
-		if (self.mouse_pos[0] >= WIDTH/4-25)&(self.mouse_pos[1] >= 175)&(
-			self.mouse_pos[0] <= WIDTH/4+25)&(self.mouse_pos[1] <= 225):
-			self.mouse_on_cr_up = True
-		else:
-			self.mouse_on_cr_up = False
+		(self.mouse_on_cr_up, 
+		 self.mouse_on_mi_up) = actions.mouse_on_pm_up(self.mouse_pos, WIDTH)
 
-		if (self.mouse_pos[0] >= WIDTH*3/4-25)&(self.mouse_pos[1] >= 175)&(
-			self.mouse_pos[0] <= WIDTH*3/4+25)&(self.mouse_pos[1] <= 225):
-			self.mouse_on_mi_up = True
-		else:
-			self.mouse_on_mi_up = False
-
-	def mouse_on_pm_down(self):
+	def mouse_on_pm_down(self): # 512 -> 503
 		"""
 		Fonction pour détecter si le curseur de la souris se trouve au-dessus
 		des boutons servant à faire varier la valeur de la borne maximal du
 		nombre de caractères d'un mot.
 		"""
-		if (self.mouse_pos[0] >= WIDTH/4-25)&(self.mouse_pos[1] >= 300)&(
-			self.mouse_pos[0] <= WIDTH/4+25)&(self.mouse_pos[1] <= 350):
-			self.mouse_on_cr_dw = True
-		else:
-			self.mouse_on_cr_dw = False
+		(self.mouse_on_cr_dw, self.mouse_on_mi_dw
+		 ) = actions.mouse_on_pm_down(self.mouse_pos, WIDTH)
 
-		if (self.mouse_pos[0] >= WIDTH*3/4-25)&(self.mouse_pos[1] >= 300)&(
-			self.mouse_pos[0] <= WIDTH*3/4+25)&(self.mouse_pos[1] <= 350):
-			self.mouse_on_mi_dw = True
-		else:
-			self.mouse_on_mi_dw = False
-
-	def mouse_on_tirets_guess(self):
+	def mouse_on_tirets_guess(self): # 530 -> 521
 		"""
 		Fonction pour détecter si le curseur de la souris se trouve au-dessus
 		boutons pour la sélection de la présence ou non de tiret(s) dans le
 		mot que devra deviner l'humain.
 		"""
-		if (self.mouse_pos[0] >= WIDTH/4-50)&(self.mouse_pos[1] >= 425)&(
-			self.mouse_pos[0] <= WIDTH/4+50)&(self.mouse_pos[1] <= 475):
-			self.m_on_tiret_t = True
-		else:
-			self.m_on_tiret_t = False
+		(self.m_on_tiret_t, self.m_on_tiret_f
+		 ) = actions.mouse_on_tirets_guess(self.mouse_pos, WIDTH)
 
-		if (self.mouse_pos[0] >= WIDTH*3/4-50)&(self.mouse_pos[1] >= 425)&(
-			self.mouse_pos[0] <= WIDTH*3/4+50)&(self.mouse_pos[1] <= 475):
-			self.m_on_tiret_f = True
-		else:
-			self.m_on_tiret_f = False
-
-	def mouse_on_tirets_mg(self):
+	def mouse_on_tirets_mg(self): # 545 -> 540
 		"""
 		Fonction pour détecter si le curseur de la souris se trouve au-dessus
 		des caractères pouvant être transformé de lettre à tiret ou
 		inversement.
 		"""
-		if (self.mouse_pos[1] >= 365)&(self.mouse_pos[1] <= 410):
-			self.cells_dx = np.arange(self.length)*30+self.recenter
-			mx = (self.mouse_pos[0] >= self.cells_dx)&(
-				  self.mouse_pos[0] <= self.cells_dx+25)
+		self.m_on_tiret_mg = actions.mouse_on_tirets_mg(self.mouse_pos,
+										  				self.length,
+										  				self.recenter)
 
-			self.m_on_tiret_mg = mx
-		else:
-			self.m_on_tiret_mg = np.zeros(self.length, dtype=bool)
-
-	def mouse_on_start_guess(self):
+	def mouse_on_start_guess(self): # 556 -> 553
 		"""
 		Fonction pour détecter si le curseur de la souris se trouve au-dessus
 		du bouton pour lancer une partie où l'humain doit trouver un mot.
 		"""
-		if (self.mouse_pos[0] >= WIDTH/2-100)&(self.mouse_pos[1] >= 500)&(
-			self.mouse_pos[0] <= WIDTH/2+100)&(self.mouse_pos[1] <= 550):
-			self.m_on_start_g = True
-		else:
-			self.m_on_start_g = False
+		self.m_on_start_g = actions.mouse_on_start_guess(self.mouse_pos,
+														 WIDTH)
 
-	def mouse_on_letters(self):
+	def mouse_on_letters(self): # 569 -> 563
 		"""
 		Fonction pour détecter si le curseur de la souris se trouve au-dessus
 		d'une des lettres du clavier.
 		"""
-		mx = (self.mouse_pos[0] >= POSITIONS[:, 0])&(
-			  self.mouse_pos[0] <= POSITIONS[:, 0]+50)
+		self.m_on_letters = actions.mouse_on_letters(self.mouse_pos, POSITIONS)
 
-		my = (self.mouse_pos[1] >= POSITIONS[:, 1])&(
-			  self.mouse_pos[1] <= POSITIONS[:, 1]+50)
-
-		self.m_on_letters = mx&my
-
-	def mouse_on_start_mg(self):
+	def mouse_on_start_mg(self): # 581 -> 577
 		"""
 		Fonction pour détecter si le curseur de la souris se trouve au-dessus
 		du bouton pour lancer une partie où l'ordinateur doit trouver le mot
 		choisit par l'humain.
 		"""
-		if (self.mouse_pos[0] >= WIDTH/2-100)&(self.mouse_pos[1] >= 450)&(
-			self.mouse_pos[0] <= WIDTH/2+100)&(self.mouse_pos[1] <= 500):
-			self.m_on_start_m = True
-		else:
-			self.m_on_start_m = False
+		self.m_on_start_m = actions.mouse_on_start_mg(self.mouse_pos, WIDTH)
 
-	def mouse_on_repsonse(self):
+	def mouse_on_repsonse(self): # 605 -> 590
 		"""
 		Fonction pour détecter si le curseur de la souris se trouve au-dessus
 		des boutons oui/non/confirmer lors-ce-que c'est à l'ordinateur de
 		trouver le mot choisit par l'humain.
 		"""
-		if (self.mouse_pos[0] >= 50)&(self.mouse_pos[1] >= 150)&(
-			self.mouse_pos[0] <= 150)&(self.mouse_pos[1] <= 200):
-			self.m_on_oui_mkg = True
-		else:
-			self.m_on_oui_mkg = False
-		
-		if (self.mouse_pos[0] >= 200)&(self.mouse_pos[1] >= 150)&(
-			self.mouse_pos[0] <= 300)&(self.mouse_pos[1] <= 200):
-			self.m_on_non_mkg = True
-		else:
-			self.m_on_non_mkg = False
+		(self.m_on_oui_mkg, self.m_on_non_mkg,
+		 self.m_on_conf_mkg) = actions.mouse_on_repsonse(self.mouse_pos)
 
-		if (self.mouse_pos[0] >= 100)&(self.mouse_pos[1] >= 225)&(
-			self.mouse_pos[0] <= 250)&(self.mouse_pos[1] <= 275):
-			self.m_on_conf_mkg = True
-		else:
-			self.m_on_conf_mkg = False
-
-	def mouse_on_propose(self):
+	def mouse_on_propose(self): # 618 -> 614
 		"""
 		Fonction pour détecter si le curseur de la souris se trouve au-dessus
 		d'un des caractères associé à une lettre "minimale".
 		"""
-		if type(self.is_letter) == bool:
-			if self.is_letter:
-				if (self.mouse_pos[1] >= 400)&(self.mouse_pos[1] <= 450):
-					self.m_on_propose = (self.mouse_pos[0] >= self.center_propos)&(
-										 self.mouse_pos[0] <= self.center_propos+50)
-				else:
-					self.m_on_propose[:] = False
+		self.m_on_propose = actions.mouse_on_propose(self.mouse_pos,
+													 self.is_letter,
+													 self.center_propos,
+													 self.m_on_propose)
 
-	def mouse_on_letters_mg(self):
+	def mouse_on_letters_mg(self): # 633 -> 628
 		"""
 		Fonction pour détecter si le curseur de la souris se trouve au-dessus
 		des caractères pouvant être transformé de lettre à tiret ou
 		inversement.
 		"""
-		if (self.mouse_pos[1] >= 315)&(self.mouse_pos[1] <= 355):
-			self.cells_dx = np.arange(self.length)*30+self.recenter
-			mx = (self.mouse_pos[0] >= self.cells_dx)&(
-				  self.mouse_pos[0] <= self.cells_dx+25)
+		self.m_on_tiret_mg = actions.mouse_on_letters_mg(self.mouse_pos,
+														 self.length,
+														 self.recenter)
 
-			self.m_on_tiret_mg = mx
-		else:
-			self.m_on_tiret_mg = np.zeros(self.length, dtype=bool)
+	def mouse_on_player(self):
+		"""
+		Fonction pour détecter si le curseur de la souris se trouve au-dessus
+		des boutons de selection du joueur qui devra deviner / faire deviner un
+		mot à l'autre joueur.
+		"""
+		(self.mouse_on_p1,
+		 self.mouse_on_p2) = actions.mouse_on_player(self.mouse_pos)
 
-	def choice_mode(self):
+	def choice_mode(self): # 536 -> 517
 		"""
 		Fonction pour détecter si le curseur de la souris se trouve au-dessus
 		d'un des deux bouttons du choix du type de jeu lors du clique.
 		"""
-		if (self.mouse_pos[0] >= 129.4)&(self.mouse_pos[1] >= 282.95)&(
-			self.mouse_pos[0] <= 669.6)&(self.mouse_pos[1] <= 317.05):
-			self.guess = True
-			self.make_guess = False
-			self.initialized = True
-			pygame.time.wait(400)
+		(self.guess, self.make_guess, self.two_player, self.initialized,
+		 self.choiced, self.representation, self.etat, self.recenter
+		 ) = actions.choice_mode(WIDTH, self.mouse_on_guess,
+								 self.mouse_on_m_guess,
+								 self.mouse_on_2_player, self.guess,
+								 self.make_guess, self.two_player,
+								 self.initialized, self.length, self.choiced,
+								 self.representation, self.etat,
+								 self.recenter)
 
-		if (self.mouse_pos[0] >= 155.8)&(self.mouse_pos[1] >= 383.5)&(
-			self.mouse_pos[0] <= 644.2)&(self.mouse_pos[1] <= 416.5):
-			self.choiced = '_'*self.length
-			self.representation = np.zeros(self.length, dtype=bool)
-			self.etat = np.zeros(self.length) -1
-			self.recenter = WIDTH/2-30*self.length/2
-			self.make_guess = True
-			self.guess = False
-			self.initialized = True
-			pygame.time.wait(400)
-
-	def update_init_guess(self):
+	def update_init_guess(self): # 584 -> 550
 		"""
 		Fonction pour détecter quelles intéractions sont faîtes sur les
 		caractéristiques du mot qui sera deviné par l'humain.
 		"""
-		if (self.mouse_pos[0] >= WIDTH/4-25)&(self.mouse_pos[1] >= 175)&(
-			self.mouse_pos[0] <= WIDTH/4+25)&(self.mouse_pos[1] <= 225):
-			if self.length_limits[0] < self.length_limits[1]:
-				self.length_limits[0] += 1
+		(self.length_limits, self.tirets, self.choiced, self.start_g,
+		 self.length, self.representation, self.recenter,
+		 self.show_must_choice_tiret) = actions.update_init_guess(
+			 WIDTH, DATA, self.mouse_on_cr_up, self.mouse_on_mi_up,
+			 self.mouse_on_cr_dw, self.mouse_on_mi_dw, self.m_on_tiret_t,
+			 self.m_on_tiret_f, self.m_on_start_g, self.length_limits,
+			 self.tirets, self.choiced, self.start_g, self.length,
+			 self.representation, self.recenter, self.show_must_choice_tiret)
 
-		elif (self.mouse_pos[0] >= WIDTH*3/4-25)&(self.mouse_pos[1] >= 175)&(
-			  self.mouse_pos[0] <= WIDTH*3/4+25)&(self.mouse_pos[1] <= 225):
-			if self.length_limits[0] > 1:
-				self.length_limits[0] -= 1
-
-		elif (self.mouse_pos[0] >= WIDTH/4-25)&(self.mouse_pos[1] >= 300)&(
-			  self.mouse_pos[0] <= WIDTH/4+25)&(self.mouse_pos[1] <= 350):
-			if self.length_limits[1] < 25:
-				self.length_limits[1] += 1
-
-		elif (self.mouse_pos[0] >= WIDTH*3/4-25)&(self.mouse_pos[1] >= 300)&(
-			  self.mouse_pos[0] <= WIDTH*3/4+25)&(self.mouse_pos[1] <= 350):
-			if self.length_limits[0] < self.length_limits[1]:
-				self.length_limits[1] -= 1
-
-		elif (self.mouse_pos[0] >= WIDTH/4-50)&(self.mouse_pos[1] >= 425)&(
-			  self.mouse_pos[0] <= WIDTH/4+50)&(self.mouse_pos[1] <= 475):
-			self.tirets = True
-			self.show_must_choice_tiret = False
-
-		elif (self.mouse_pos[0] >= WIDTH*3/4-50)&(self.mouse_pos[1] >= 425)&(
-			  self.mouse_pos[0] <= WIDTH*3/4+50)&(self.mouse_pos[1] <= 475):
-			self.tirets = False
-			self.show_must_choice_tiret = False
-
-		elif (self.mouse_pos[0] >= WIDTH/2-100)&(self.mouse_pos[1] >= 500)&(
-			self.mouse_pos[0] <= WIDTH/2+100)&(self.mouse_pos[1] <= 550):
-			if type(self.tirets) == bool:
-				self.start_g = True
-				self.draw_word()
-				self.length = len(self.choiced)
-				self.representation = np.zeros(self.length, dtype=bool)
-				self.recenter = WIDTH/2-30*self.length/2
-			else:
-				self.show_must_choice_tiret = True
-
-	def update_init_make_guess(self):
+	def update_init_make_guess(self): # 594 -> 546
 		"""
 		Fonction d'intéraction de l'humain pour choisir les caractéristiques
 		mot qu'il fera deviner à l'ordinateur.	
 		"""
-		if (self.mouse_pos[0] >= WIDTH/4-25)&(self.mouse_pos[1] >= 175)&(
-			self.mouse_pos[0] <= WIDTH/4+25)&(self.mouse_pos[1] <= 225):
-			if self.length < 25:
-				self.length += 1
-				self.choiced += '_'
-				self.representation = np.append(self.representation, False)
-				self.etat = np.append(self.etat, -1)
-				self.profil = np.append(self.profil, 0)
-				self.recenter = WIDTH/2-30*self.length/2
-				self.show_no_word = False
+		(self.length, self.choiced, self.representation, self.etat,
+		 self.profil, self.show_no_word, self.num_tirets, self.start_m,
+		 self.mapp, self.rec_mapp, self.can_start_m, self.recenter
+		 ) = actions.update_init_make_guess(
+			DATA, WIDTH, self.mouse_on_cr_up, self.mouse_on_mi_up,
+			self.m_on_tiret_mg, self.m_on_start_m, self.length, self.choiced,
+			self.representation, self.etat, self.profil, self.recenter,
+			self.show_no_word, self.num_tirets, self.start_m,
+			self.can_start_m, self.mapp, self.rec_mapp)
 
-		elif (self.mouse_pos[0] >= WIDTH*3/4-25)&(self.mouse_pos[1] >= 175)&(
-			  self.mouse_pos[0] <= WIDTH*3/4+25)&(self.mouse_pos[1] <= 225):
-			if self.length > 1:
-				self.length -= 1
-				self.choiced = self.choiced[:-1]
-				self.representation = self.representation[:-1]
-				self.etat = self.etat[:-1]
-				self.profil = self.profil[:-1]
-				self.recenter = WIDTH/2-30*self.length/2
-				self.show_no_word = False
+	def update_init_2_player(self): # 652 -> 613
+		"""
+		Fonction d'intéraction de l'humain pour choisir les caractéristiques
+		mot qu'il fera deviner à l'autre humain.	
+		"""
+		(self.choiced, self.representation, self.etat, self.profil,
+		 self.recenter, self.show_no_word, self.num_tirets, self.turn,
+		 self.start_2p, self.step, self.length
+		 ) = actions.update_init_2_player(WIDTH, self.mouse_on_cr_up,
+										  self.mouse_on_mi_up,
+										  self.m_on_tiret_mg,
+										  self.mouse_on_p1, self.mouse_on_p2,
+										  self.m_on_start_m, self.length,
+										  self.choiced, self.representation,
+										  self.etat, self.profil,
+										  self.recenter, self.show_no_word,
+										  self.num_tirets, self.turn,
+										  self.start_2p, self.step)
 
-		elif True in self.m_on_tiret_mg:
-			#transform : true de _ en - & self.transformation et inversement
-			if self.representation[self.m_on_tiret_mg][0]:
-				self.representation[self.m_on_tiret_mg] = False
-				self.profil[self.m_on_tiret_mg] = 0
-				self.choiced = np.array(list(self.choiced), dtype='O')
-				self.choiced[self.m_on_tiret_mg] = '_'
-				self.etat[self.m_on_tiret_mg] = -1
-				self.choiced = np.sum(self.choiced)
-				self.num_tirets -= 1
-				self.show_no_word = False
-
-			else:
-				self.representation[self.m_on_tiret_mg] = True
-				self.profil[self.m_on_tiret_mg] = 1
-				self.choiced = np.array(list(self.choiced), dtype='O')
-				self.choiced[self.m_on_tiret_mg] = '-'
-				self.etat[self.m_on_tiret_mg] = 1
-				self.choiced = np.sum(self.choiced)
-				self.num_tirets += 1
-				self.show_no_word = False
-
-		if (self.mouse_pos[0] >= WIDTH/2-100)&(self.mouse_pos[1] >= 450)&(
-			self.mouse_pos[0] <= WIDTH/2+100)&(self.mouse_pos[1] <= 500):
-			if self.num_tirets == 0:
-				self.start_m = True
-				self.show_no_word = False
-				self.is_possible_start_mg()
-			else:
-				self.is_possible_start_mg()
-				if self.can_start_m:
-					self.start_m = True
-					self.show_no_word = False
-				else:
-					self.show_no_word = True
-
-	def choice_letter_guess(self):
+	def choice_letter_guess(self): # 668 -> 640
 		"""
 		Fonction d'interaction de l'humain pour choisir quelle lettre
 		"minimale" choisir.
 		"""
-		if (np.sum(self.m_on_letters) > 0)&(self.health > 0):
-			mx = (self.mouse_pos[0] >= POSITIONS[:, 0])&(
-				  self.mouse_pos[0] <= POSITIONS[:, 0]+50)
+		(self.health, self.choice_letter, self.tested_letters,
+		 self.show_alredy_tryed, self.representation, self.clavier
+		 ) = actions.choice_letter_guess(self.m_on_letters, self.health,
+										 self.choice_letter,
+										 self.tested_letters,
+										 self.show_alredy_tryed,
+										 self.choiced, self.a_like,
+										 self.c_like, self.e_like,
+										 self.i_like, self.o_like,
+										 self.u_like, self.representation,
+										 self.clavier, POSITIONS, LETTERS)
 
-			my = (self.mouse_pos[1] >= POSITIONS[:, 1])&(
-				  self.mouse_pos[1] <= POSITIONS[:, 1]+50)
-
-			mask = mx&my
-			self.choice_letter = LETTERS[mask][0]
-			if self.choice_letter in self.tested_letters:
-				self.choice_letter = None
-				self.show_alredy_tryed = True
-			else:
-				self.show_alredy_tryed = False
-				self.tested_letters.append(self.choice_letter)
-				not_in = True
-				for i, w in enumerate(self.choiced):
-					if w in self.a_like:
-						w = 'a'
-					elif w in self.c_like:
-						w = 'c'
-					elif w in self.e_like:
-						w = 'e'
-					elif w in self.i_like:
-						w = 'i'
-					elif w in self.o_like:
-						w = 'o'
-					elif w in self.u_like:
-						w = 'u'
-		
-					if w == self.choice_letter:
-						self.representation[i] = True
-						not_in = False
-
-				if not_in:
-					self.health -= 1
-					self.clavier[LETTERS == self.choice_letter] = -1
-				else:
-					self.clavier[LETTERS == self.choice_letter] = 1
-
-	def make_guess_response(self):
+	def make_guess_response(self): # 672 -> 600
 		"""
 		Fonction d'interaction de l'humain pour répondre aux propositions de
 		l'ordinateur.
 		"""
-		if self.propose != None:
-			if self.m_on_conf_mkg & (type(self.is_letter) == bool):
-				self.show_is_there = False
-				if self.is_letter:
-					if (0 in self.etat)&(self.one_possible == False):
-						self.etat[self.etat == 0] = 1
-						self.must_do_some = False
-						if len(self.etat[self.etat == 1]) == self.length:
-							self.result_mg = 'v'
-						else:
-							self.update_from_answer()
-							if self.no_possible == False:
-								self.whats_best()
-								self.is_letter = None
+		(self.is_letter, self.show_is_there, self.etat, self.must_do_some,
+		 self.result_mg, self.no_possible, self.choiced, self.representation,
+		 self.health, self.selected, self.m_on_propose, self.possibles,
+		 self.center_propos, self.propose, self.one_possible, self.mapp
+		 ) = actions.make_guess_response(
+			DATA, WIDTH, self.link_dico, self.m_on_conf_mkg,
+			self.show_is_there, self.must_do_some, self.m_on_oui_mkg,
+			self.m_on_non_mkg, self.m_on_propose, self.m_on_tiret_mg,
+			self.propose, self.is_letter, self.etat, self.one_possible,
+			self.no_possible, self.length, self.result_mg, self.choiced,
+			self.representation, self.health, self.selected, self.possibles,
+			self.center_propos, self.mapp)
 
-					elif self.one_possible:
-						self.choiced = self.propose
-						self.representation[:] = True
-						self.etat[:] = 1
-						self.must_do_some = False
-						self.result_mg = 'v'
+	def make_guess_human(self):
+		"""
+		Fonction où un joueur choisit / confirme / remplit le mot.
+		"""
+		(self.step, self.health, self.vict_1, self.vict_2,
+		 self.defai_1, self.defai_2, self.choice_letter, self.tested_letters,
+		 self.choiced, self.is_letter, self.etat, self.representation,
+		 self.clavier, self.possibles, self.center_propos, self.m_on_propose,
+		 self.selected, self.result_mg
+		 ) = actions.make_guess_human(
+			WIDTH, POSITIONS, LETTERS,
+			self.m_on_letters, self.m_on_oui_mkg, self.m_on_non_mkg,
+			self.m_on_conf_mkg, self.m_on_tiret_mg, self.m_on_propose,
+			self.step, self.health, self.vict_1,
+			self.vict_2, self.defai_1, self.defai_2, self.representation,
+			self.clavier, self.is_letter, self.choice_letter,
+			self.tested_letters, self.choiced, self.etat, self.link_dico,
+			self.propose, self.possibles, self.center_propos,
+			self.selected, self.length, self.result_mg, self.turn,
+			self.a_like, self.c_like, self.e_like, self.i_like, self.o_like,
+			self.u_like)
 
-					else:
-						self.must_do_some = True
-
-				else:
-					self.health -= 1
-					if self.health == 0:
-						self.result_mg = 'p'
-
-					elif self.one_possible:
-						self.health = 0
-						self.result_mg = 'p'
-						self.no_possible = True
-
-					else:
-						self.update_from_answer()
-						self.whats_best()
-						self.is_letter = None
-
-			elif self.m_on_conf_mkg & (type(self.is_letter) != bool):
-				self.show_is_there = True
-
-			elif self.m_on_oui_mkg:
-				self.is_letter = True
-				self.show_is_there = False
-				self.must_do_some = False
-
-			elif self.m_on_non_mkg:
-				self.is_letter = False
-				self.show_is_there = False
-				self.choiced = np.array(list(self.choiced), dtype=object)
-				self.choiced[self.etat == 0] = '_'
-				self.choiced = np.sum(self.choiced)
-				self.representation[self.etat == 0] = False
-				self.etat[self.etat == 0] = -1
-				self.must_do_some = False
-
-			elif self.is_letter:
-				if True in self.m_on_propose:
-					self.selected = self.m_on_propose*1 + self.selected*2
-					self.selected[self.selected > 1] = 0
-					self.selected = self.selected.astype(bool)
-					self.must_do_some = False
-
-				else:
-					if True in self.m_on_tiret_mg:
-						if self.etat[self.m_on_tiret_mg] == 1:
-							pass
-
-						elif True in self.selected:
-							self.etat[self.m_on_tiret_mg] = 0
-							self.representation[self.m_on_tiret_mg] = True
-							self.choiced = np.array(list(self.choiced), dtype=object)
-							self.choiced[self.m_on_tiret_mg] = self.possibles[self.selected]
-							self.choiced = np.sum(self.choiced)
-							self.must_do_some = False
-
-						else:
-							self.etat[self.m_on_tiret_mg] = -1
-							self.representation[self.m_on_tiret_mg] = False
-							self.choiced = np.array(list(self.choiced), dtype=object)
-							self.choiced[self.m_on_tiret_mg] = '_'
-							self.choiced = np.sum(self.choiced)
-
-	def draw_init(self, window):
+	def draw_init(self, window): # 719 -> 681
 		"""
 		Fonction pour afficher l'écrant d'acceuil.
 		"""
-		window.fill(BG_COLOUR)
-		title = TITLE_FONT.render('Bienvenue dans le jeu du pendu !', 1, 'black')
-		window.blit(title, (WIDTH/2-title.get_width()/2, 100-title.get_height()/2))
-		mode = TEXT_FONT.render('Quel mode voulez-vous tester ?', 1, 'black')
-		window.blit(mode, (WIDTH/2-mode.get_width()/2, 200-mode.get_height()/2))
+		graphical.draw_init(window, BG_COLOUR, WIDTH, TITLE_FONT, TEXT_FONT,
+							BUTTON_COLOR, self.mouse_on_guess,
+							self.mouse_on_m_guess, self.mouse_on_2_player)
 
-		mode_guess = TEXT_FONT.render("Deviner un mot choisit par l'ordinateur",
-									  1, 'black')
-		pygame.draw.rect(window, BUTTON_COLOR,
-						   (WIDTH/2-mode_guess.get_width()*0.55,
-							300-mode_guess.get_height()*0.55,
-							mode_guess.get_width()*1.1,
-							mode_guess.get_height()*1.1))
-
-		if self.mouse_on_guess:
-			pygame.draw.rect(window, (0, 0, 0),
-								(WIDTH/2-mode_guess.get_width()*0.55,
-								300-mode_guess.get_height()*0.55,
-								mode_guess.get_width()*1.1,
-								mode_guess.get_height()*1.1), 3)
-
-		window.blit(mode_guess, (WIDTH/2-mode_guess.get_width()/2,
-								 300-mode_guess.get_height()/2))
-
-		mode_make_guess = TEXT_FONT.render("Faire deviner un mot à l'ordinateur",
-											1, 'black')
-		pygame.draw.rect(window, BUTTON_COLOR,
-						   (WIDTH/2-mode_make_guess.get_width()*0.55,
-							400-mode_make_guess.get_height()*0.55,
-							mode_make_guess.get_width()*1.1,
-							mode_make_guess.get_height()*1.1))
-
-		if self.mouse_on_m_guess:
-			pygame.draw.rect(window, (0, 0, 0),
-								(WIDTH/2-mode_make_guess.get_width()*0.55,
-								400-mode_make_guess.get_height()*0.55,
-								mode_make_guess.get_width()*1.1,
-								mode_make_guess.get_height()*1.1), 3)
-
-		window.blit(mode_make_guess, (WIDTH/2-mode_make_guess.get_width()/2,
-									  400-mode_make_guess.get_height()/2))
-
-		pygame.display.update()
-
-	def draw_init_guess(self, window):
+	def draw_init_guess(self, window): # 791 -> 696
 		"""
 		Fonction pour afficher l'écrant du choix des caractéristiques du mot
 		tiré par l'ordinateur.
 		"""
-		window.fill(BG_COLOUR)
-		pygame.draw.polygon(window, BUTTON_COLOR, ARROW)
-		if self.mouse_on_return:
-			pygame.draw.polygon(window, (0, 0, 0), ARROW, 3)
+		graphical.draw_init_guess(window, BG_COLOUR, WIDTH, TEXT_FONT,
+								  BUTTON_COLOR, ARROW, CROSS_UP, CROSS_DW,
+								  self.mouse_on_return, self.mouse_on_cr_up,
+								  self.mouse_on_mi_up, self.mouse_on_cr_dw,
+								  self.mouse_on_mi_dw, self.m_on_tiret_t,
+								  self.m_on_tiret_f, self.m_on_start_g,
+								  self.length_limits, self.tirets,
+								  self.show_must_choice_tiret)
 
-		mode = TEXT_FONT.render("Mode choisit : deviner un mot choisit par l'ordinateur",
-								  1, 'black')
-		window.blit(mode, (WIDTH/2-mode.get_width()/2, 100-mode.get_height()/2))
 
-		min_tx = TEXT_FONT.render('Nombre minimum de caracteres (tirets inclus)',
-									1, 'black')
-		window.blit(min_tx, (WIDTH/2-min_tx.get_width()/2,
-							 150-min_tx.get_height()/2))
-
-		pygame.draw.rect(window, BUTTON_COLOR, (WIDTH/4-25, 175, 50, 50))
-		pygame.draw.polygon(window, (0, 0, 0), CROSS_UP)
-		if self.mouse_on_cr_up:
-			pygame.draw.rect(window, (0, 0, 0), (WIDTH/4-25, 175, 50, 50), 3)
-
-		numlw_txt = TEXT_FONT.render(str(self.length_limits[0]), 1, 'black')
-		pygame.draw.rect(window, (255, 250, 250), (WIDTH/2, 175, 50, 50))
-		pygame.draw.rect(window, (0, 0, 0), (WIDTH/2, 175, 50, 50), 3)
-		window.blit(numlw_txt, (WIDTH/2-numlw_txt.get_width()/2+25,
-								175-numlw_txt.get_height()/2+25))
-
-		pygame.draw.rect(window, BUTTON_COLOR, (WIDTH*3/4-25, 175, 50, 50))
-		pygame.draw.rect(window, (0, 0, 0), (WIDTH*3/4+10-25, 195, 30, 10))
-		if self.mouse_on_mi_up:
-			pygame.draw.rect(window, (0, 0, 0), (WIDTH*3/4-25, 175, 50, 50), 3)
-
-		max_tx = TEXT_FONT.render('nombre maximum de caracteres (tirets inclus)',
-									1, 'black')
-		window.blit(max_tx, (WIDTH/2-max_tx.get_width()/2,
-							 275-max_tx.get_height()/2))
-
-		pygame.draw.rect(window, BUTTON_COLOR, (WIDTH/4-25, 300, 50, 50))
-		pygame.draw.polygon(window, (0, 0, 0), CROSS_DW)
-		if self.mouse_on_cr_dw:
-			pygame.draw.rect(window, (0, 0, 0), (WIDTH/4-25, 300, 50, 50), 3)
-
-		numup_txt = TEXT_FONT.render(str(self.length_limits[1]), 1, 'black')
-		pygame.draw.rect(window, (255, 250, 250), (WIDTH/2, 300, 50, 50))
-		pygame.draw.rect(window, (0, 0, 0), (WIDTH/2, 300, 50, 50), 3)
-		window.blit(numup_txt, (WIDTH/2-numup_txt.get_width()/2+25,
-							  300-numup_txt.get_height()/2+25))
-
-		pygame.draw.rect(window, BUTTON_COLOR, (WIDTH*3/4-25, 300, 50, 50))
-		pygame.draw.rect(window, (0, 0, 0), (WIDTH*3/4+10-25, 320, 30, 10))
-		if self.mouse_on_mi_dw:
-			pygame.draw.rect(window, (0, 0, 0), (WIDTH*3/4-25, 300, 50, 50), 3)
-
-		tiret_tx = TEXT_FONT.render("Il peut y avoir un (ou plusieurs) trait d'union",
-									1, 'black')
-		window.blit(tiret_tx, (WIDTH/2-tiret_tx.get_width()/2,
-								400-tiret_tx.get_height()/2))
-
-		if self.tirets:
-			pygame.draw.rect(window, (0, 255, 0), (WIDTH/4-50, 425, 100, 50))
-		else:
-			pygame.draw.rect(window, BUTTON_COLOR, (WIDTH/4-50, 425, 100, 50))
-
-		if self.m_on_tiret_t:
-			pygame.draw.rect(window, (0, 0, 0), (WIDTH/4-50, 425, 100, 50), 3)
-		
-		if self.tirets == False:
-			pygame.draw.rect(window, (255, 0, 0), (WIDTH*3/4-50, 425, 100, 50))
-		else:
-			pygame.draw.rect(window, BUTTON_COLOR, (WIDTH*3/4-50, 425, 100, 50))
-
-		if self.m_on_tiret_f:
-			pygame.draw.rect(window, (0, 0, 0), (WIDTH*3/4-50, 425, 100, 50), 3)
-
-		o_tx = TEXT_FONT.render("Oui", 1, 'black')
-		window.blit(o_tx, (WIDTH/4-o_tx.get_width()/2,
-							425-o_tx.get_height()/2+25))
-
-		n_tx = TEXT_FONT.render("Non", 1, 'black')
-		window.blit(n_tx, (WIDTH*3/4-n_tx.get_width()/2,
-							425-n_tx.get_height()/2+25))
-
-		pygame.draw.rect(window, BUTTON_COLOR, (WIDTH/2-100, 500, 200, 50))
-		if self.m_on_start_g:
-			pygame.draw.rect(window, (0, 0, 0), (WIDTH/2-100, 500, 200, 50), 3)
-
-		st_tx = TEXT_FONT.render("Commencer", 1, 'black')
-		window.blit(st_tx, (WIDTH/2-st_tx.get_width()/2,
-						    500-st_tx.get_height()/2+25))
-
-		if self.show_must_choice_tiret:
-			mtir_tx_1 = TEXT_FONT.render(
-					"Vous devez indiquer si il est possible de tomber sur un",
-					1, 'black')
-
-			window.blit(mtir_tx_1, (WIDTH/2-mtir_tx_1.get_width()/2,
-									615-mtir_tx_1.get_height()/2))
-			
-			must_tiret_tx_2 = TEXT_FONT.render(
-					"mot ayant un (ou plusieurs) trait d'union", 1, 'black')
-
-			window.blit(must_tiret_tx_2, (WIDTH/2-must_tiret_tx_2.get_width()/2,
-										  650-must_tiret_tx_2.get_height()/2))
-
-		pygame.display.update()
-
-	def draw_init_make_guess(self, window):
+	def draw_init_make_guess(self, window): # 786 -> 711
 		"""
 		Fonction pour afficher l'écrant du choix des caractéristiques du mot
 		que l'ordinateur devra deviner.
 		"""
-		window.fill(BG_COLOUR)
-		pygame.draw.polygon(window, BUTTON_COLOR, ARROW)
+		graphical.draw_init_make_guess(window, WIDTH, BG_COLOUR, BUTTON_COLOR,
+									   TEXT_FONT, ARROW, CROSS_UP,
+									   self.mouse_on_return,
+									   self.mouse_on_cr_up,
+									   self.mouse_on_mi_up,
+									   self.m_on_tiret_mg, self.m_on_start_m,
+									   self.length, self.choiced,
+									   self.recenter, self.show_no_word)
 
-		if self.mouse_on_return:
-			pygame.draw.polygon(window, (0, 0, 0), ARROW, 3)
+	def draw_init_2_player(self, window): # 910 -> 832
+		"""
+		Fonction pour afficher l'écrant du choix des caractéristiques du mot
+		que l'autre humain devra deviner.
+		"""
+		graphical.draw_init_2_player(window, WIDTH, BG_COLOUR, BUTTON_COLOR,
+									 ARROW, CROSS_UP, TEXT_FONT,
+									 self.mouse_on_return, self.mouse_on_cr_up,
+									 self.mouse_on_mi_up, self.m_on_tiret_mg,
+									 self.m_on_start_m, self.mouse_on_p1,
+									 self.mouse_on_p2, self.length,
+									 self.choiced, self.recenter, self.turn,
+									 self.vict_1, self.defai_1, self.vict_2,
+									 self.defai_2)
 
-		mode = TEXT_FONT.render(
-						"Mode choisit : faire deviner un mot à l'ordinateur",
-						1, 'black')
-
-		window.blit(mode, (WIDTH/2-mode.get_width()/2, 100-mode.get_height()/2))
-
-		len_tx = TEXT_FONT.render('Nombre de caracteres (tirets inclus)',
-								  1, 'black')
-
-		window.blit(len_tx, (WIDTH/2-len_tx.get_width()/2,
-							 150-len_tx.get_height()/2))
-
-		pygame.draw.rect(window, BUTTON_COLOR, (WIDTH/4-25, 175, 50, 50))
-		pygame.draw.polygon(window, (0, 0, 0), CROSS_UP)
-		if self.mouse_on_cr_up:
-			pygame.draw.rect(window, (0, 0, 0), (WIDTH/4-25, 175, 50, 50), 3)
-
-		numlw_txt = TEXT_FONT.render(str(self.length), 1, 'black')
-		pygame.draw.rect(window, (255, 250, 250), (WIDTH/2-25, 175, 50, 50))
-		pygame.draw.rect(window, (0, 0, 0), (WIDTH/2-25, 175, 50, 50), 3)
-		window.blit(numlw_txt, (WIDTH/2-numlw_txt.get_width()/2,
-							  175-numlw_txt.get_height()/2+25))
-
-		pygame.draw.rect(window, BUTTON_COLOR, (WIDTH*3/4-25, 175, 50, 50))
-		pygame.draw.rect(window, (0, 0, 0), (WIDTH*3/4-15, 195, 30, 10))
-		if self.mouse_on_mi_up:
-			pygame.draw.rect(window, (0, 0, 0), (WIDTH*3/4-25, 175, 50, 50), 3)
-
-		tir1_tx = TEXT_FONT.render(
-				"Cliquez sur les cases où il y a un trait d'union (ignorer cette",
-				1, 'black')
-
-		window.blit(tir1_tx, (WIDTH/2-tir1_tx.get_width()/2,
-							  265-tir1_tx.get_height()/2))
-
-		tir2_tx = TEXT_FONT.render("étape si il n'y en a pas dans votre mot)",
-								   1, 'black')
-		window.blit(tir2_tx, (WIDTH/2-tir2_tx.get_width()/2,
-							  300-tir2_tx.get_height()/2))
-
-		for i in range(self.length):
-			if self.choiced[i] != '-':
-				if self.m_on_tiret_mg[i]:
-					pygame.draw.rect(window, (255, 0, 0),
-									 (i*30+self.recenter, 400, 25, 5))
-				else:
-					pygame.draw.rect(window, (0, 0, 0),
-									 (i*30+self.recenter, 400, 25, 5))
-			else:
-				if self.m_on_tiret_mg[i]:
-					pygame.draw.rect(window, (255, 0, 0),
-									 (i*30+self.recenter+2.5, 385, 20, 3))
-				else:
-					pygame.draw.rect(window, (0, 0, 0),
-									 (i*30+self.recenter+2.5, 385, 20, 3))
-
-		pygame.draw.rect(window, BUTTON_COLOR, (WIDTH/2-100, 450, 200, 50))
-		if self.m_on_start_m:
-			pygame.draw.rect(window, (0, 0, 0), (WIDTH/2-100, 450, 200, 50), 3)
-
-		st_tx = TEXT_FONT.render('Commencer', 1, 'black')
-		window.blit(st_tx, (WIDTH/2-st_tx.get_width()/2,
-							450-st_tx.get_height()/2+25))
-
-		if self.show_no_word:
-			no_tx1 = TEXT_FONT.render(
-						"Je n'ai aucun mot dans ma base de données qui puisse",
-						1, (0, 0, 0))
-			window.blit(no_tx1, (WIDTH/2-no_tx1.get_width()/2,
-								 525-no_tx1.get_height()/2+25))
-
-			no_tx2 = TEXT_FONT.render(
-					  "corespondre aux caractéristiques entrées", 1, (0, 0, 0))
-			window.blit(no_tx2, (WIDTH/2-no_tx2.get_width()/2,
-								 550-no_tx2.get_height()/2+25))
-
-		pygame.display.update()
-
-	def draw_guess(self, window):
+	def draw_guess(self, window): # 803 -> 724
 		"""
 		Fonction pour afficher l'écrant du choix des "minimale" lettres
 		pouvant être choisit par l'humain pour chercher à trouver le mot tiré
 		par l'ordinateur.
 		"""
-		window.fill(BG_COLOUR)
-		pygame.draw.polygon(window, BUTTON_COLOR, ARROW)
-		if self.mouse_on_return:
-			pygame.draw.polygon(window, (0, 0, 0), ARROW, 3)
+		graphical.draw_guess(window, WIDTH, BG_COLOUR, BUTTON_COLOR,
+							 TEXT_FONT, RESULT_FONT, ARROW, POSITIONS,
+							 LETTERS, self.mouse_on_return, self.m_on_letters,
+							 self.length, self.choiced, self.recenter,
+							 self.representation, self.clavier, self.health,
+							 self.result_g, self.show_alredy_tryed)
 
-		for i in range(self.length):
-			if self.choiced[i] != '-':
-				pygame.draw.rect(window, (0, 0, 0),
-								 (i*30+self.recenter, 400, 25, 5))
-			else:
-				pygame.draw.rect(window, (0, 0, 0),
-								 (i*30+self.recenter+2.5, 385, 20, 3))
-
-			if self.representation[i]:
-				tx = TEXT_FONT.render(str(self.choiced[i]), 1, 'black')
-				window.blit(tx, (i*30+self.recenter-tx.get_width()/2+12.5, 365))
-			elif self.health <= 0:
-				tx = TEXT_FONT.render(str(self.choiced[i]), 1, 'red')
-				window.blit(tx, (i*30+self.recenter-tx.get_width()/2+12.5, 365))
-
-		for i in range(26):
-			if self.clavier[i] == -1:
-				pygame.draw.rect(window, (255, 0, 0),
-								 (POSITIONS[i, 0], POSITIONS[i, 1], 50, 50))
-			elif self.clavier[i] == 1:
-				pygame.draw.rect(window, (0, 255, 0),
-								 (POSITIONS[i, 0], POSITIONS[i, 1], 50, 50))
-			else:
-				pygame.draw.rect(window, BUTTON_COLOR,
-								 (POSITIONS[i, 0], POSITIONS[i, 1], 50, 50))
-
-			if self.m_on_letters[i] & (self.clavier[i] == 0):
-				pygame.draw.rect(window, (0, 0, 0),
-								 (POSITIONS[i, 0], POSITIONS[i, 1], 50, 50), 3)
-
-			let_tx = TEXT_FONT.render(str(LETTERS[i]), 1, 'black')
-			window.blit(let_tx, (POSITIONS[i, 0]+25-let_tx.get_width()/2,
-								 POSITIONS[i, 1]-let_tx.get_height()/2+25))
-
-		if self.health > 1:
-			h_tx = TEXT_FONT.render('Points de vie = '+str(self.health),
-									1, 'black')
-		else:
-			h_tx = TEXT_FONT.render('Point de vie = '+str(self.health),
-									1, 'black')
-
-		window.blit(h_tx, (25, 175))
-
-		if self.health <= 7:
-			pygame.draw.rect(window, (0, 0, 0), (450, 300, 300, 10))
-		if self.health <= 6:
-			pygame.draw.rect(window, (0, 0, 0), (650, 100, 10, 200))
-		if self.health <= 5:
-			pygame.draw.rect(window, (0, 0, 0), (525, 100, 150, 10))
-		if self.health <= 4:
-			pygame.draw.rect(window, (0, 0, 0), (575, 100, 10, 65))
-		if self.health <= 3:
-			pygame.draw.circle(window, (0, 0, 0), (580, 180), 20)
-			pygame.draw.circle(window, BG_COLOUR, (580, 180), 15)
-		if self.health <= 2:
-			pygame.draw.rect(window, (0, 0, 0), (578.5, 200, 5, 50))
-		if self.health <= 1:
-			pygame.draw.rect(window, (0, 0, 0), (565, 212.5, 30, 4))
-		if self.health <= 0:
-			
-			pygame.draw.polygon(window, (0, 0, 0), ((580, 235), (590, 280),
-												    (585, 280), (580, 250),
-													(575, 280), (570, 280)))
-
-		if self.result_g == 'v':
-			vic_tx = RESULT_FONT.render('Vous avez trouvé le mot !',
-										1, (0, 255, 0))
-			window.blit(vic_tx, (25, 215))
-
-		if self.result_g == 'p':
-			per_tx = RESULT_FONT.render("Vous n'avez pas trouvé le mot !",
-										1, (255, 0, 0))
-			window.blit(per_tx, (25, 215))
-
-		if self.show_alredy_tryed:
-			tryed_tx = TEXT_FONT.render('Vous avez déjà essayé cette lettre',
-										1, 'black')
-			window.blit(tryed_tx, (WIDTH/2-tryed_tx.get_width()/2, 600))
-
-		pygame.display.update()
-
-	def draw_make_guess(self, window):
+	def draw_make_guess(self, window): # 868 -> 744
 		"""
 		Fonction pour afficher l'écrant du choix des lettres "minimale"
 		choisient par l'ordinateur et les intéractions possibles pour
 		l'humain.
 		"""
-		window.fill(BG_COLOUR)
-		pygame.draw.polygon(window, BUTTON_COLOR, ARROW)
-		if self.mouse_on_return:
-			pygame.draw.polygon(window, (0, 0, 0), ARROW, 3)
+		graphical.draw_make_guess(window, WIDTH, ARROW, BG_COLOUR,
+								  BUTTON_COLOR, TEXT_FONT,
+								  self.mouse_on_return, self.m_on_tiret_mg,
+								  self.m_on_propose, self.m_on_oui_mkg,
+								  self.m_on_non_mkg, self.m_on_conf_mkg,
+								  self.length, self.choiced, self.recenter,
+								  self.representation, self.etat,
+								  self.propose, self.one_possible,
+								  self.is_letter, self.possibles,
+								  self.selected, self.center_propos,
+								  self.show_is_there, self.must_do_some,
+								  self.health, self.no_possible,
+								  self.result_mg)
 
-		for i in range(self.length):
-			if self.choiced[i] != '-':
-				if self.m_on_tiret_mg[i]:
-					pygame.draw.rect(window, (0, 0, 255),
-									 (i*30+self.recenter, 350, 25, 5))
-				else:
-					pygame.draw.rect(window, (0, 0, 0),
-									 (i*30+self.recenter, 350, 25, 5))
+	def draw_2_player(self, window):
+		"""
+		Function pour afficher l'écran de jeu en mode deux joueurs (humains).
+		"""
+		graphical.draw_2_player(window, WIDTH, ARROW, BG_COLOUR,
+								BUTTON_COLOR, TEXT_FONT, RESULT_FONT,
+								POSITIONS, LETTERS,
+								self.mouse_on_return, self.m_on_letters,
+								self.m_on_oui_mkg, self.m_on_non_mkg,
+								self.m_on_conf_mkg, self.m_on_propose,
+								self.m_on_tiret_mg,
+								self.health, self.length, self.choiced,
+								self.recenter, self.representation, self.step,
+								self.clavier, self.choice_letter,
+								self.is_letter, self.possibles,
+								self.selected, self.center_propos, self.etat,
+								self.result_mg, self.vict_1, self.vict_2,
+								self.defai_1, self.defai_2, self.turn)
 
-			if self.representation[i]:
-				if self.etat[i] == 0:
-					tx = TEXT_FONT.render(str(self.choiced[i]), 1, (0, 0, 255))
-				else:
-					tx = TEXT_FONT.render(str(self.choiced[i]), 1, 'black')
-
-				window.blit(tx, (i*30+self.recenter-tx.get_width()/2+12.5, 320))
-
-		if (self.propose != None)&(self.one_possible == False):
-			is_tx1 = TEXT_FONT.render("Est-ce qu'il y a un :", 1, 'black')
-			window.blit(is_tx1, (50, 75))
-			is_tx2 = TEXT_FONT.render("'"+str(self.propose)+"'", 1, 'black')
-			window.blit(is_tx2, (50-is_tx2.get_width()/2+is_tx1.get_width()/2, 100))
-
-		elif (self.propose != None)&(self.one_possible):
-			is_tx1 = TEXT_FONT.render("Est-ce qu'il s'agit du mot :", 1, 'black')
-			window.blit(is_tx1, (50, 75))
-			is_tx2 = TEXT_FONT.render("'"+str(self.propose)+"'", 1, 'black')
-			window.blit(is_tx2, (50-is_tx2.get_width()/2+is_tx1.get_width()/2, 100))
-
-		if self.is_letter:
-			pygame.draw.rect(window, (0, 255, 0), (50, 150, 100, 50))
-			if self.one_possible == False:
-				for i in range(len(self.possibles)):
-					if self.selected[i]:
-						pygame.draw.rect(window, (0, 0, 255), (self.center_propos[i],
-												 400, 50, 50))
-					else:
-						pygame.draw.rect(window, BUTTON_COLOR, (self.center_propos[i],
-												 400, 50, 50))
-	
-					if self.m_on_propose[i]:
-						pygame.draw.rect(window, (0, 0, 0), (self.center_propos[i],
-											 400, 50, 50), 3)
-	
-					tx_pl = TEXT_FONT.render(str(self.possibles[i]), 1, 'black')
-					window.blit(tx_pl, (self.center_propos[i]+25-tx_pl.get_width()/2,
-										425-tx_pl.get_height()/2))
-
-		else:
-			pygame.draw.rect(window, BUTTON_COLOR, (50, 150, 100, 50))
-
-		tx_y = TEXT_FONT.render('Oui', 1, (0, 0, 0))
-		window.blit(tx_y, (100-tx_y.get_width()/2, 175-tx_y.get_height()/2))
-		if self.m_on_oui_mkg:
-			pygame.draw.rect(window, (0, 0, 0), (50, 150, 100, 50), 3)
-
-		if self.is_letter == False:
-			pygame.draw.rect(window, (255, 0, 0), (200, 150, 100, 50))
-		else:
-			pygame.draw.rect(window, BUTTON_COLOR, (200, 150, 100, 50))
-
-		tx_n = TEXT_FONT.render('Non', 1, (0, 0, 0))
-		window.blit(tx_n, (250-tx_n.get_width()/2, 175-tx_n.get_height()/2))
-		if self.m_on_non_mkg:
-			pygame.draw.rect(window, (0, 0, 0), (200, 150, 100, 50), 3)
-
-		pygame.draw.rect(window, BUTTON_COLOR, (100, 225, 150, 50))
-		tx_c = TEXT_FONT.render('Confirmer', 1, (0, 0, 0))
-		window.blit(tx_c, (175-tx_c.get_width()/2, 250-tx_c.get_height()/2))
-		if self.m_on_conf_mkg:
-			pygame.draw.rect(window, (0, 0, 0), (100, 225, 150, 50), 3)
-
-		if self.show_is_there:
-			tx_isth1 = TEXT_FONT.render('Vous devez indiquer si la lettre proposée est présente',
-									    1, 'black')
-			window.blit(tx_isth1, (WIDTH/2-tx_isth1.get_width()/2, 400))
-
-			tx_isth2 = TEXT_FONT.render('ou non', 1, 'black')
-			window.blit(tx_isth2, (WIDTH/2-tx_isth2.get_width()/2, 425))
-
-		if self.must_do_some:
-			tx_isth1 = TEXT_FONT.render('Vous devez indiquer où la lettre proposée est présente',
-									    1, 'black')
-			window.blit(tx_isth1, (WIDTH/2-tx_isth1.get_width()/2, 450))
-
-			tx_isth2 = TEXT_FONT.render('ou changer la sélection à non', 1, 'black')
-			window.blit(tx_isth2, (WIDTH/2-tx_isth2.get_width()/2, 475))
-
-		if self.health <= 7:
-			pygame.draw.rect(window, (0, 0, 0), (450, 250, 300, 10))
-		if self.health <= 6:
-			pygame.draw.rect(window, (0, 0, 0), (650, 50, 10, 200))
-		if self.health <= 5:
-			pygame.draw.rect(window, (0, 0, 0), (525, 50, 150, 10))
-		if self.health <= 4:
-			pygame.draw.rect(window, (0, 0, 0), (575, 50, 10, 65))
-		if self.health <= 3:
-			pygame.draw.circle(window, (0, 0, 0), (580, 130), 20)
-			pygame.draw.circle(window, BG_COLOUR, (580, 130), 15)
-		if self.health <= 2:
-			pygame.draw.rect(window, (0, 0, 0), (578.5, 150, 5, 50))
-		if self.health <= 1:
-			pygame.draw.rect(window, (0, 0, 0), (565, 165.5, 30, 4))
-		if self.health <= 0:
-			pygame.draw.polygon(window, (0, 0, 0), ((580, 185), (590, 230),
-												    (585, 230), (580, 200),
-													(575, 230), (570, 230)))
-
-		if self.no_possible:
-			tx_isth1 = TEXT_FONT.render("Je n'ai pas de mot corresponant aux caractéristiques que",
-									    1, 'black')
-			window.blit(tx_isth1, (WIDTH/2-tx_isth1.get_width()/2, 400))
-
-			tx_isth2 = TEXT_FONT.render("vous m'avez fournis. J'ai donc perdus. Je vous conseille",
-										1, 'black')
-			window.blit(tx_isth2, (WIDTH/2-tx_isth2.get_width()/2, 425))
-
-			tx_isth3 = TEXT_FONT.render("de mettre à jour ma base de données en conséquence.",
-										1, 'black')
-			window.blit(tx_isth3, (WIDTH/2-tx_isth3.get_width()/2, 450))
-
-		if (self.result_mg == 'p')&(self.one_possible == False):
-			tx_re = TEXT_FONT.render("J'ai perdus, je n'ai pas trouvé le mot que vous aviez choisit",
-									 1, 'black')
-			window.blit(tx_re, (WIDTH/2-tx_re.get_width()/2, 450))
-
-		elif self.result_mg == 'v':
-			tx_re = TEXT_FONT.render("J'ai gagné, j'ai trouvé le mot que vous aviez choisit",
-									 1, 'black')
-			window.blit(tx_re, (WIDTH/2-tx_re.get_width()/2, 450))
-
-		pygame.display.update()
 
 def main():
 	"""
@@ -1402,7 +744,8 @@ def main():
 			if event.type == pygame.MOUSEBUTTONDOWN:
 				if game.initialized == False:
 					game.choice_mode()
-				elif game.initialized&(game.start_g == False)&(game.start_m == False):
+
+				elif game.initialized&(not game.start_g)&(not game.start_m)&(not game.start_2p):
 					if game.mouse_on_return:
 						game.re_init_accueil()
 
@@ -1411,6 +754,9 @@ def main():
 
 					elif game.guess:
 						game.update_init_guess()
+
+					elif game.two_player:
+						game.update_init_2_player()
 
 				elif game.initialized & game.start_g:
 					if game.mouse_on_return:
@@ -1423,6 +769,12 @@ def main():
 						game.re_init_make_guess()
 					else:
 						game.make_guess_response()
+
+				elif game.initialized & game.start_2p:
+					if game.mouse_on_return:
+						game.re_init_2_player()
+					else:
+						game.make_guess_human()
 
 		if game.initialized:
 			if game.guess:
@@ -1464,8 +816,29 @@ def main():
 					game.mouse_on_tirets_mg()
 					game.draw_init_make_guess(WIN)
 
+			elif game.two_player:
+				if game.start_2p:
+					game.mouse_return_on()
+					game.mouse_on_letters_mg()
+					game.mouse_on_repsonse()
+					game.mouse_on_propose()
+					game.mouse_on_letters()
+					game.draw_2_player(WIN)
+					if game.result_mg != None:
+						pygame.time.wait(4000)
+						game.re_init_2_player()
+
+				else:
+					game.mouse_on_player()
+					game.mouse_on_start_mg()
+					game.mouse_on_pm_up()
+					game.mouse_return_on()
+					game.mouse_on_tirets_mg()
+					game.draw_init_2_player(WIN)
+
 			else:
-				raise ValueError('guess or make_guess should be True !')
+				raise ValueError(
+					'guess, make_guess or two_player should be True !')
 
 		else:
 			game.draw_init(WIN)
