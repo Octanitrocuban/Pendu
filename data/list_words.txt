@@ -72014,6 +72014,7 @@ croquettes
 croquez
 croquiez
 croquions
+croquignolesque
 croquis
 croquons
 cross
@@ -212867,6 +212868,7 @@ mortes-eaux
 mortes-saisons
 mortier
 mortiers
+mortifère
 mortifia
 mortifiai
 mortifiaient
@@ -226682,6 +226684,7 @@ pandémie
 pandémies
 pandémonium
 pandémoniums
+pandiculer
 pandiculation
 pandiculations
 pandit
@@ -235396,6 +235399,7 @@ pétreuse
 pétreuses
 pétreux
 pétri
+pétrichor
 pétrie
 pétries
 pétrifia
