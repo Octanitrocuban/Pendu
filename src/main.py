@@ -609,7 +609,7 @@ class Game:
 		 self.clavier, self.possibles, self.center_propos, self.m_on_propose,
 		 self.selected, self.result_mg
 		 ) = actions.make_guess_human(
-			WIDTH, POSITIONS, LETTERS,
+			WIDTH, LETTERS,
 			self.m_on_letters, self.m_on_oui_mkg, self.m_on_non_mkg,
 			self.m_on_conf_mkg, self.m_on_tiret_mg, self.m_on_propose,
 			self.step, self.health, self.vict_1,

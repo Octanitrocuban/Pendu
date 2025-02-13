@@ -324,8 +324,7 @@ def guess_victory(health, representation, length, result_g):
 def choice_letter_guess(m_on_letters, health, choice_letter,
 						tested_letters, show_alredy_tryed, choiced, a_like,
 						c_like, e_like, i_like, o_like, u_like,
-						representation, clavier,
-						letters):
+						representation, clavier, letters):
 	"""
 	Fonction d'interaction de l'humain pour choisir quelle lettre
 	"minimale" choisir.
@@ -517,14 +516,13 @@ def make_guess_response(data, width, link_dico, m_on_conf_mkg,
 			m_on_propose, possibles, center_propos, propose, one_possible,
 			mapp)
 
-def make_guess_human(width, positions, letters,
-					 m_on_letters, m_on_oui_mkg, m_on_non_mkg, m_on_conf_mkg,
-					 m_on_tiret_mg, m_on_propose,
-					 step, health, vict_1, vict_2, defai_1, defai_2,
-					 representation, clavier, is_letter, choice_letter,
-					 tested_letters, choiced, etat, link_dico, propose,
-					 possibles, center_propos, selected, length, result_mg,
-					 turn, a_like, c_like, e_like, i_like, o_like, u_like):
+def make_guess_human(width, letters, m_on_letters, m_on_oui_mkg, m_on_non_mkg,
+					 m_on_conf_mkg, m_on_tiret_mg, m_on_propose, step, health,
+					 vict_1, vict_2, defai_1, defai_2, representation,
+					 clavier, is_letter, choice_letter, tested_letters,
+					 choiced, etat, link_dico, propose, possibles,
+					 center_propos, selected, length, result_mg, turn, a_like,
+					 c_like, e_like, i_like, o_like, u_like):
 
 	# setp (g=guess, e=examine)
 	if step == 'g':
