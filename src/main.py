@@ -579,7 +579,7 @@ class Game:
 										 self.c_like, self.e_like,
 										 self.i_like, self.o_like,
 										 self.u_like, self.representation,
-										 self.clavier, POSITIONS, LETTERS)
+										 self.clavier, LETTERS)
 
 	def make_guess_response(self): # 672 -> 600
 		"""

@@ -325,7 +325,7 @@ def choice_letter_guess(m_on_letters, health, choice_letter,
 						tested_letters, show_alredy_tryed, choiced, a_like,
 						c_like, e_like, i_like, o_like, u_like,
 						representation, clavier,
-						positions, letters):
+						letters):
 	"""
 	Fonction d'interaction de l'humain pour choisir quelle lettre
 	"minimale" choisir.
@@ -347,8 +347,6 @@ def choice_letter_guess(m_on_letters, health, choice_letter,
 	representation : TYPE
 		DESCRIPTION.
 	clavier : TYPE
-		DESCRIPTION.
-	positions : TYPE
 		DESCRIPTION.
 	letters : TYPE
 		DESCRIPTION.
@@ -526,8 +524,7 @@ def make_guess_human(width, positions, letters,
 					 representation, clavier, is_letter, choice_letter,
 					 tested_letters, choiced, etat, link_dico, propose,
 					 possibles, center_propos, selected, length, result_mg,
-					 turn,
-					 a_like, c_like, e_like, i_like, o_like, u_like):
+					 turn, a_like, c_like, e_like, i_like, o_like, u_like):
 
 	# setp (g=guess, e=examine)
 	if step == 'g':
@@ -609,7 +606,6 @@ def make_guess_human(width, positions, letters,
 			choice_letter, tested_letters, choiced, is_letter, etat,
 			representation, clavier, possibles, center_propos, m_on_propose,
 			selected, result_mg)
-
 
 def get_linked_letters(link_dico, propose, width):
 	"""
