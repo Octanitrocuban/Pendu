@@ -25,6 +25,10 @@ Sur l'ensemble de la base des mots de la base de donnée (336 852 [04/06/2025]),
 
 ### probabiliste (à venir) :
 
-### entropue (à venir) :
+Ce robot reprends le même comportement que le fréquentiel, mais au lieu de proposer la lettre la plus probable, il vas tirer la proposition en se basant sur la densité de probabilité calculée.
+
+### entropie (à venir) :
+
+Ce robot calcul l'entropie de shanon sur un pool de données qui est affiné à chaque réponses.
 
 
