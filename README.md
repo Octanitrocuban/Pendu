@@ -10,7 +10,20 @@ Le dossier src contient quatre fichiers python :
     - actions.py : scripte contenant les fontcions qui vont modifier les variables du jeu (réflexion de l'ia, clique du joueur ...).
     - graphical.py : scripte contenant les fonctions servant à afficher l'interface graphique.
 
-Le fichier ./data/list_words.txt est une version modifier de la liste : https://www.pallier.org/extra/liste.de.mots.francais.frgut.txt, pour la passer en utf-8.
+## La base de données :
+La base de données utiliseée par les robots est calculée depuis le fichier ./data/list_words.txt avec le script  to_database.py. Le fichier ./data/list_words.txt est une version modifier de la liste : https://www.pallier.org/extra/liste.de.mots.francais.frgut.txt, pour la passer en utf-8.
+
+Plusieurs mots ont été rajoutés a posteriori car non présent dans la liste (+321 mots)
+
+Plusieurs mots ont été rajoutés a posteriori car non présent dans la liste (- 22 mots)
+
+Taille de la base de données :
+
+336 531 mots [12/11/2025]
+
+336 852 mots [04/06/2025]
+
+336 830 mots [10/06/2025]
 
 ## Les méthodes des robots pour trouver le mot du joueur humain :
 
