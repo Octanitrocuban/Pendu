@@ -34,7 +34,7 @@ Bien que ce comportement permet au robot de minimiser le risque de perdre, cela 
 
 Le comportement de ce robot fait que celui-ci répetera toujours la même suite de propositions tant que les conditions seront identiques.
 
-Sur l'ensemble de la base des mots de la base de donnée (336 852 [04/06/2025]), 67 ont été trouvé du premier coup (sans avoir à proposer de lettre) et 2 402 n'ont pas été trouvé.
+Sur l'ensemble de la base des mots de la base de donnée (336 830 [10/06/2025]), 67 ont été trouvé du premier coup (sans avoir à proposer de lettre) et 2 391 n'ont pas été trouvé. Cela donne un taux de succés d'un peu plus de 99,29%.
 
 ### probabiliste (à venir) :
 
